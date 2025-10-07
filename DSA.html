@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Merge Sort Visualizer - Python Core Focus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .bar {
+            width: 20px;
+            margin: 0 4px; /* Increased margin from 1px to 4px to prevent label overlap */
+            transition: height 0.3s ease, background-color 0.3s ease, transform 0.3s ease;
+            position: relative;
+        }
+        .bar-container {
+            display: flex;
+            align-items: flex-end;
+            min-height: 40vh;
+            max-width: 90vw;
+            margin: auto;
+            border-bottom: 2px solid #3b82f6;
+        }
+        .bar-label {
+            position: absolute;
+            top: -20px;
+            font-size: 0.75rem;
+            color: #4b5563;
+            text-align: center;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">DSA Visualization Tool</h1>
+            <p class="text-lg text-gray-600 mt-2">Merge Sort using Python-Style Logic Simulation (Full-Stack Fresher Project)</p>
+        </header>
+
+        <!-- Controls Panel -->
+        <div class="bg-white p-6 rounded-xl shadow-lg mb-8 flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                <!-- Array Size Control -->
+                <div class="flex items-center space-x-2">
+                    <label for="arraySize" class="text-gray-700 font-medium whitespace-nowrap">Array Size (N):</label>
+                    <input type="number" id="arraySize" value="20" min="5" max="50" class="w-20 p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                </div>
+
+                <!-- Speed Control -->
+                <div class="flex items-center space-x-2">
+                    <label for="speed" class="text-gray-700 font-medium">Speed (ms):</label>
+                    <select id="speed" class="p-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                        <option value="50">Fast (50ms)</option>
+                        <option value="150" selected>Medium (150ms)</option>
+                        <option value="300">Slow (300ms)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex gap-3 w-full md:w-auto justify-end">
+                <!-- Generate Button -->
+                <button id="generateBtn" 
+                    class="px-5 py-2 rounded-lg font-semibold transition duration-200 ease-in-out shadow-md bg-yellow-500 hover:bg-yellow-600 text-white transform hover:scale-[1.02]">
+                    Generate New Array
+                </button>
+                <!-- Sort Button -->
+                <button id="sortBtn" 
+                    class="px-5 py-2 rounded-lg font-semibold transition duration-200 ease-in-out shadow-md bg-blue-600 hover:bg-blue-700 text-white transform hover:scale-[1.02] disabled:bg-blue-300 disabled:cursor-not-allowed" 
+                    disabled>
+                    Start Merge Sort
+                </button>
+            </div>
+        </div>
+
+        <!-- Visualization Area -->
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Visualization Status: <span id="statusText" class="text-blue-600">Ready</span></h2>
+            <div id="visualizationContainer" class="bar-container border-2 border-dashed border-gray-300 p-2 rounded-lg">
+                <!-- Bars will be injected here -->
+            </div>
+            <div id="stats" class="mt-4 text-center text-gray-600">
+                <span id="comparisons">Comparisons: 0</span> |
+                <span id="swaps">Swaps/Writes: 0</span> |
+                <span id="arrayInfo">N = 20</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // --- Configuration and State ---
+        const VISUALIZER_CONTAINER = document.getElementById('visualizationContainer');
+        const SORT_BUTTON = document.getElementById('sortBtn');
+        const GENERATE_BUTTON = document.getElementById('generateBtn');
+        const ARRAY_SIZE_INPUT = document.getElementById('arraySize');
+        const SPEED_SELECT = document.getElementById('speed');
+        const STATUS_TEXT = document.getElementById('statusText');
+        const COMPARISONS_STAT = document.getElementById('comparisons');
+        const SWAPS_STAT = document.getElementById('swaps');
+        const ARRAY_INFO_STAT = document.getElementById('arrayInfo');
+
+        let currentArray = [];
+        let isSorting = false;
+        let animationTimeout = null;
+        let sortSteps = [];
+        let comparisonCount = 0;
+        let swapCount = 0;
+
+        // --- Core Utility Functions ---
+
+        /**
+         * Generates a new array of random integers.
+         * @param {number} size - The desired size of the array.
+         * @returns {number[]} The generated array.
+         */
+        function generateRandomArray(size) {
+            const arr = [];
+            for (let i = 0; i < size; i++) {
+                // Values between 5 and 95 for good visualization range
+                arr.push(Math.floor(Math.random() * 90) + 5);
+            }
+            return arr;
+        }
+
+        /**
+         * Renders the array as a set of visual bars.
+         * @param {number[]} arr - The current state of the array.
+         * @param {Object} indices - Indices to highlight for visualization.
+         */
+        function renderBars(arr, { comparing = [], writing = [], sorted = [] }) {
+            VISUALIZER_CONTAINER.innerHTML = '';
+            const maxValue = 100; // Max possible value for scaling
+            const hasLabels = arr.length < 30; // Check for label display logic
+
+            arr.forEach((value, index) => {
+                const bar = document.createElement('div');
+                const heightPercentage = (value / maxValue) * 100;
+
+                bar.classList.add('bar', 'rounded-t-sm');
+                bar.style.height = `${heightPercentage}%`;
+
+                // Set bar width based on array size for responsiveness
+                // Use a larger factor (70) when labels are present to ensure legibility
+                const barWidthCalc = hasLabels ? Math.max(15, 70 / arr.length) : Math.max(8, 60 / arr.length); 
+                bar.style.width = `${barWidthCalc}px`;
+
+                let color = 'bg-blue-500'; // Default color
+
+                // Determine highlight color based on state (priority: sorted > writing > comparing)
+                if (sorted.includes(index)) {
+                    color = 'bg-green-500'; // Final sorted
+                } else if (writing.includes(index)) {
+                    color = 'bg-red-500'; // Being written/swapped/placed
+                } else if (comparing.includes(index)) {
+                    color = 'bg-yellow-500'; // Being compared
+                }
+
+                bar.classList.add(color);
+
+                // Add value label (optional, useful for smaller arrays)
+                if (hasLabels) { // Use the same check
+                    const label = document.createElement('div');
+                    label.classList.add('bar-label');
+                    label.textContent = value;
+                    bar.appendChild(label);
+                }
+
+                VISUALIZER_CONTAINER.appendChild(bar);
+            });
+        }
+
+        // --- Python Back-end Simulation (Merge Sort Logic) ---
+
+        /**
+         * Simulates the Python back-end calculating the Merge Sort steps.
+         * In a real app, this would be an API call to a Django/FastAPI endpoint.
+         * @param {number[]} arr - The initial array.
+         * @returns {Array<Object>} A list of state objects representing each step.
+         */
+        function simulatePythonMergeSort(arr) {
+            const steps = [];
+            let tempArray = [...arr];
+            let compCount = 0;
+            let writeCount = 0;
+
+            // Helper to record a state change (mimicking API response)
+            function recordStep(newArr, indices = {}) {
+                steps.push({
+                    array: [...newArr], // Snapshot of the array
+                    indices: {
+                        comparing: indices.comparing || [],
+                        writing: indices.writing || [],
+                        sorted: indices.sorted || []
+                    },
+                    compCount: compCount,
+                    writeCount: writeCount
+                });
+            }
+
+            // The recursive MergeSort function
+            function mergeSort(array, start, end) {
+                if (start >= end) {
+                    recordStep(tempArray, { sorted: [start] });
+                    return;
+                }
+
+                const mid = Math.floor((start + end) / 2);
+
+                mergeSort(array, start, mid);
+                mergeSort(array, mid + 1, end);
+                merge(array, start, mid, end);
+            }
+
+            // The Merge function
+            function merge(array, start, mid, end) {
+                const left = array.slice(start, mid + 1);
+                const right = array.slice(mid + 1, end + 1);
+                let i = 0, j = 0, k = start;
+
+                while (i < left.length && j < right.length) {
+                    compCount++;
+                    recordStep(tempArray, { comparing: [start + i, mid + 1 + j] }); // Highlight comparison
+
+                    if (left[i] <= right[j]) {
+                        tempArray[k] = left[i];
+                        writeCount++;
+                        i++;
+                    } else {
+                        tempArray[k] = right[j];
+                        writeCount++;
+                        j++;
+                    }
+                    recordStep(tempArray, { writing: [k] }); // Highlight placement/write
+                    k++;
+                }
+
+                while (i < left.length) {
+                    tempArray[k] = left[i];
+                    writeCount++;
+                    recordStep(tempArray, { writing: [k] });
+                    i++; k++;
+                }
+
+                while (j < right.length) {
+                    tempArray[k] = right[j];
+                    writeCount++;
+                    recordStep(tempArray, { writing: [k] });
+                    j++; k++;
+                }
+
+                // Mark the entire merged sub-array as sorted (green)
+                const sortedIndices = [];
+                for (let idx = start; idx <= end; idx++) {
+                    sortedIndices.push(idx);
+                }
+                recordStep(tempArray, { sorted: sortedIndices });
+            }
+
+            // Initial call to start the sort
+            recordStep(arr, { sorted: [] }); // Initial state
+            mergeSort(tempArray, 0, arr.length - 1);
+
+            // Final state: mark all as sorted
+            const allSorted = Array.from({ length: arr.length }, (_, i) => i);
+            recordStep(tempArray, { sorted: allSorted });
+
+            return steps;
+        }
+
+        // --- Visualization Control ---
+
+        /**
+         * Main function to iterate through and animate the sort steps.
+         */
+        function startVisualization() {
+            if (isSorting) return;
+
+            isSorting = true;
+            SORT_BUTTON.disabled = true;
+            GENERATE_BUTTON.disabled = true;
+            ARRAY_SIZE_INPUT.disabled = true;
+            STATUS_TEXT.textContent = 'Sorting in progress...';
+            STATUS_TEXT.classList.replace('text-blue-600', 'text-yellow-600');
+
+            // 1. Calculate all steps (Simulate API call)
+            sortSteps = simulatePythonMergeSort(currentArray);
+            let stepIndex = 0;
+            const animationDelay = parseInt(SPEED_SELECT.value);
+
+            // 2. Recursive function to handle the animation loop
+            function animateStep() {
+                if (stepIndex >= sortSteps.length) {
+                    // Sorting finished
+                    clearTimeout(animationTimeout);
+                    isSorting = false;
+                    SORT_BUTTON.disabled = true;
+                    GENERATE_BUTTON.disabled = false;
+                    ARRAY_SIZE_INPUT.disabled = false;
+                    STATUS_TEXT.textContent = 'Sorting Complete!';
+                    STATUS_TEXT.classList.replace('text-yellow-600', 'text-green-600');
+                    return;
+                }
+
+                const step = sortSteps[stepIndex];
+
+                // Update visualization
+                renderBars(step.array, step.indices);
+
+                // Update stats
+                comparisonCount = step.compCount;
+                swapCount = step.writeCount;
+                COMPARISONS_STAT.textContent = `Comparisons: ${comparisonCount}`;
+                SWAPS_STAT.textContent = `Swaps/Writes: ${swapCount}`;
+
+                stepIndex++;
+
+                // Schedule the next step
+                animationTimeout = setTimeout(animateStep, animationDelay);
+            }
+
+            animateStep(); // Start the animation
+        }
+
+        /**
+         * Initializes or resets the entire visualization state.
+         */
+        function initializeVisualization() {
+            clearTimeout(animationTimeout);
+            isSorting = false;
+            comparisonCount = 0;
+            swapCount = 0;
+
+            const size = parseInt(ARRAY_SIZE_INPUT.value) || 20;
+            currentArray = generateRandomArray(size);
+
+            renderBars(currentArray, {}); // Initial render (blue bars)
+
+            // Reset UI state
+            SORT_BUTTON.disabled = false;
+            GENERATE_BUTTON.disabled = false;
+            ARRAY_SIZE_INPUT.disabled = false;
+            STATUS_TEXT.textContent = 'Ready';
+            STATUS_TEXT.classList.replace('text-yellow-600', 'text-green-600');
+            STATUS_TEXT.classList.add('text-blue-600');
+
+            COMPARISONS_STAT.textContent = `Comparisons: 0`;
+            SWAPS_STAT.textContent = `Swaps/Writes: 0`;
+            ARRAY_INFO_STAT.textContent = `N = ${size}`;
+        }
+
+        // --- Event Listeners ---
+        window.onload = initializeVisualization;
+        GENERATE_BUTTON.addEventListener('click', initializeVisualization);
+        SORT_BUTTON.addEventListener('click', startVisualization);
+        ARRAY_SIZE_INPUT.addEventListener('change', initializeVisualization);
+
+    </script>
+</body>
+</html>
